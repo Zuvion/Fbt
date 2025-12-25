@@ -370,6 +370,10 @@ def format_user_info(user):
         return " | ".join(parts)
     return "N/A"
 
+# Create required directories if they don't exist
+for dir_path in ["static", "static/css", "static/js", "static/img", "static/uploads", "i18n", "templates"]:
+    os.makedirs(dir_path, exist_ok=True)
+
 app=FastAPI(title="Kraken Exchange")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/i18n", StaticFiles(directory="i18n"), name="i18n")
