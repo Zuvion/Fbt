@@ -24,14 +24,29 @@ if not ADMIN_ID:
     raise ValueError("ADMIN_ID environment variable is required")
 HOST_BASE = os.getenv("HOST_BASE", "https://rengle.site")
 MIN_DEPOSIT_USDT = float(os.getenv("MIN_DEPOSIT_USDT", "50"))
-DB_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app.db")
-if DB_URL and DB_URL.startswith("postgresql://"):
-    DB_URL = DB_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if "?sslmode=" in DB_URL:
-        DB_URL = DB_URL.split("?sslmode=")[0]
+import ssl
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+raw_db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app.db")
+print(f"[DEBUG] Original DATABASE_URL: {raw_db_url[:50] if raw_db_url else 'NOT SET'}...")
+
+if raw_db_url and (raw_db_url.startswith("postgresql://") or raw_db_url.startswith("postgres://")):
+    DB_URL = raw_db_url.replace("postgres://", "postgresql+asyncpg://", 1).replace("postgresql://", "postgresql+asyncpg://", 1)
+    parsed = urlparse(DB_URL)
+    query_params = parse_qs(parsed.query)
+    query_params.pop('sslmode', None)
+    clean_query = urlencode(query_params, doseq=True)
+    DB_URL = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, clean_query, parsed.fragment))
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    engine = create_async_engine(DB_URL, pool_pre_ping=True, connect_args={"ssl": ssl_ctx})
+else:
+    DB_URL = raw_db_url
+    engine = create_async_engine(DB_URL, pool_pre_ping=True)
+print(f"[DEBUG] Final DB_URL: {DB_URL[:50]}...")
 
 Base = declarative_base()
-engine = create_async_engine(DB_URL, echo=False, future=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 class User(Base):
